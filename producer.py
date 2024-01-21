@@ -14,7 +14,7 @@ api_key = "AIzaSyCPtSwMcDbIwjSKOuVEvsquW1Sj3WXdR5c"
 youtube = build('youtube', 'v3', developerKey=api_key)
 
 # Search term for YouTube
-search_term = 'Machine Learning'
+search_term = 'Akame ga kill'
 
 
 class YouTubeStreamer:

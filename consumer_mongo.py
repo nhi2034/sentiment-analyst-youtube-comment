@@ -50,12 +50,20 @@ while True:
         text = youtube_comment['text']
         sentiment_score = analyzer.polarity_scores(text)
 
+        if sentiment_score['compound'] >= 0.05:
+            sentiment = 'positive'
+        elif sentiment_score['compound'] <= -0.05:
+            sentiment = 'negative'
+        else:
+            sentiment = 'neutral'
         # Store sentiment analysis results in MongoDB
         sentiment_entry = {
             'text': text,
             'negative_percentage': sentiment_score['neg'] * 100,
             'neutral_percentage': sentiment_score['neu'] * 100,
-            'positive_percentage': sentiment_score['pos'] * 100
+            'positive_percentage': sentiment_score['pos'] * 100,
+            'compound': sentiment_score['compound'] * 100,
+            'sentiment': sentiment  # Add the determined sentiment here
         }
         collection.insert_one(sentiment_entry)
 
