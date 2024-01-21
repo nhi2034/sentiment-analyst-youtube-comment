@@ -1,71 +1,66 @@
-import re
-import findspark
-from pyspark.ml import PipelineModel
-from pyspark.sql import SparkSession
-from pyspark.sql.functions import from_json, udf
-from pyspark.sql.types import StructType, StructField, StringType, ArrayType
-from decouple import config
+from confluent_kafka import Consumer, KafkaError
+import json
+from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
+from pymongo import MongoClient
 
+# Kafka consumer configuration
+consumer_config = {
+    'bootstrap.servers': 'localhost:9092',  # Change if Kafka broker is running on a different host
+    'group.id': 'youtube_sentiment_group',
+    'auto.offset.reset': 'earliest'
+}
 
-def write_row_in_mongo(df):
-    mongo_uri = config('MONGOACCESS')
+# MongoDB connection
+mongo_client = MongoClient('mongodb+srv://bigdatapyspark:bigdatapyspark@bigdata.d648sgf.mongodb.net/')
+db = mongo_client['youtube_sentiment']
+collection = db['sentiment_results']
 
-    df.write.format("mongo").mode("append").option("uri", mongo_uri).save()
+# Create Kafka consumer
+consumer = Consumer(consumer_config)
 
+# Subscribe to the Kafka topic
+topic = 'youtube_comments'
+consumer.subscribe([topic])
 
-if __name__ == "__main__":
-    findspark.init()
+# Sentiment analyzer
+analyzer = SentimentIntensityAnalyzer()
 
-    # Path to the pre-trained model
-    path_to_model = r''
+# Continuously poll for new messages
+while True:
+    msg = consumer.poll(1.0)  # Adjust the timeout as needed
 
-    spark = SparkSession \
-        .builder \
-        .master("local[*]") \
-        .appName("TwitterSentimentAnalysis") \
-        .config("spark.mongodb.input.uri",
-                config('MONGOACCESS')) \
-        .config("spark.mongodb.output.uri",
-                config('MONGOACCESS')) \
-        .config("spark.jars.packages", "org.mongodb.spark:mongo-spark-connector_2.12:3.0.1") \
-        .config("spark.jars.packages", "org.apache.spark:spark-sql-kafka-0-10_2.12:3.1.2") \
-        .getOrCreate()
+    if msg is None:
+        continue
+    if msg.error():
+        if msg.error().code() == KafkaError._PARTITION_EOF:
+            continue
+        else:
+            print(msg.error())
+            break
 
-    # Spark Context
-    sc = spark.sparkContext
-    sc.setLogLevel('ERROR')
+    # Process the received message
+    try:
+        youtube_comment = json.loads(msg.value())
+        
+        # Check if 'text' key is present in youtube_comment
+        if 'text' not in youtube_comment:
+            continue
 
-    # Schema for the incoming data
-    schema = StructType([StructField("message", StringType())])
+        # Perform sentiment analysis on youtube_comment['text']
+        text = youtube_comment['text']
+        sentiment_score = analyzer.polarity_scores(text)
 
-    # Read the data from kafka
-    df = spark \
-        .readStream \
-        .format("kafka") \
-        .option("kafka.bootstrap.servers", "localhost:9092") \
-        .option("subscribe", "twitter") \
-        .option("startingOffsets", "latest") \
-        .option("header", "true") \
-        .load() \
-        .selectExpr("CAST(value AS STRING) as message")
+        # Store sentiment analysis results in MongoDB
+        sentiment_entry = {
+            'text': text,
+            'negative_percentage': sentiment_score['neg'] * 100,
+            'neutral_percentage': sentiment_score['neu'] * 100,
+            'positive_percentage': sentiment_score['pos'] * 100
+        }
+        collection.insert_one(sentiment_entry)
 
-    df = df \
-        .withColumn("value", from_json("message", schema))
+    except json.JSONDecodeError as e:
+        print(f"Error decoding JSON: {e}")
 
-    # Pre-processing the data
-    pre_process = udf(
-        lambda x: re.sub(r'[^A-Za-z\n ]|(http\S+)|(www.\S+)', '', x.lower().strip()).split(), ArrayType(StringType())
-    )
-    df = df.withColumn("cleaned_data", pre_process(df.message)).dropna()
-
-    # Load the pre-trained model
-    pipeline_model = PipelineModel.load(path_to_model)
-    # Make predictions
-    prediction = pipeline_model.transform(df)
-    # Select the columns of interest
-    prediction = prediction.select(prediction.message, prediction.prediction)
-
-    # Load prediction in Mongo
-    query = prediction.writeStream.queryName("tweets") \
-        .foreachBatch(write_row_in_mongo).start()
-    query.awaitTermination()
+# Close down consumer to commit final offsets.
+consumer.close()
