@@ -14,7 +14,7 @@ api_key = "AIzaSyCPtSwMcDbIwjSKOuVEvsquW1Sj3WXdR5c"
 youtube = build('youtube', 'v3', developerKey=api_key)
 
 # Search term for YouTube
-search_term = 'ChatGPT'
+search_term = 'The future of AId'
 
 
 class YouTubeStreamer:
@@ -76,7 +76,7 @@ class YouTubeStreamer:
     def start_streaming_youtube(self):
         while True:
             self.search_youtube_videos()
-            time.sleep(1000)  # Sleep for 60 seconds before the next iteration (adjust as needed)
+            time.sleep(10)  # Sleep for 60 seconds before the next iteration (adjust as needed)
 
 
 if __name__ == '__main__':

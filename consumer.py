@@ -41,12 +41,14 @@ while True:
 
         # Perform sentiment analysis on youtube_comment['text']
         text = youtube_comment['text']
-        sentiment_score = analyzer.polarity_scores(text)['compound']
+        sentiment_score = analyzer.polarity_scores(text)
 
         # Print or use the sentiment score as needed
         print("------------------------------")
-        print(f"Sentiment Score:  {sentiment_score}")
         print(f"Text:   {youtube_comment['text']}:")
+        print("sentence was rated as ", sentiment_score['neg']*100, "% Negative")
+        print("sentence was rated as ", sentiment_score['neu']*100, "% Neutral")
+        print("sentence was rated as ", sentiment_score['pos']*100, "% Positive")
         
               
 
