@@ -1,0 +1,34 @@
+version: '3'
+
+services:
+  namenode:
+    image: sequenceiq/hadoop-docker:2.7.1
+    container_name: namenode
+    ports:
+      - "50070:50070"
+    expose:
+      - "50070"
+    environment:
+      - CLUSTER_NAME=test
+      - NAMENODE=true
+      - SECONDARY_NAMENODE=true
+      - DATANODE=true
+      - RESOLVER=10.0.75.1
+      - HADOOP_PREFIX=/usr/local/hadoop
+      - HDFS_CONF_dfs_webhdfs_enabled=true
+
+  datanode:
+    image: sequenceiq/hadoop-docker:2.7.1
+    container_name: datanode
+    expose:
+      - "50075"
+    environment:
+      - CLUSTER_NAME=test
+      - NAMENODE=false
+      - SECONDARY_NAMENODE=false
+      - DATANODE=true
+      - RESOLVER=10.0.75.1
+      - HADOOP_PREFIX=/usr/local/hadoop
+      - HDFS_CONF_dfs_webhdfs_enabled=true
+    depends_on:
+      - namenode
